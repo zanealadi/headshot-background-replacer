@@ -61,26 +61,33 @@ def processHeadshot():
     mask_array = mask.numpy_view()
     fixed_mask = (mask_array > 0).astype(np.uint8)
 
-    # shrink mask to remove white edges
-    kernel = np.ones((5, 5), np.uint8)
-    fixed_mask = cv2.erode(fixed_mask, kernel, iterations=5)
-    fixed_mask = np.expand_dims(fixed_mask, axis=2) # fix resizing issue
+    # apply edge feathering to remove boarder
+    fixed_mask = np.expand_dims(fixed_mask, axis=2)
+    blurredMask = cv2.GaussianBlur(fixed_mask, (101, 101), 50)
+    
 
-    # remove the background by applying the mask to the image
-    just_person = user_headshot * fixed_mask
+    blurredMask = blurredMask.astype(float) 
+   
+
+    # makes sure shape is correct format
+    if len(blurredMask.shape) == 2:
+        blurredMask = blurredMask[:, :, np.newaxis]
+
+    justPerson = (user_headshot * blurredMask).astype(np.uint8)
 
     # load a background image and resize to fit
     backgroundImage = cv2.imread(selected_background_path)
     height, width = user_headshot.shape[:2]
-    resize_background = cv2.resize(backgroundImage, (width, height))
+    resizeBackground = cv2.resize(backgroundImage, (width, height))
 
 
     # overlay the new background with the person 
-    invert_mask = 1 - fixed_mask
-    final_headshot = (just_person) + (invert_mask * resize_background)
+    invertMask = 1 - blurredMask
+    backgroundPart = (resizeBackground * invertMask).astype(np.uint8)
+    finalHeadshot = justPerson + backgroundPart
 
     # save new image
-    cv2.imwrite('./outputs/final_result.png', final_headshot)
+    cv2.imwrite('./outputs/final_result.png', finalHeadshot)
     print("Final Result Saved!")
 
 root = tk.Tk()
