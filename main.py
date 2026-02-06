@@ -8,6 +8,7 @@ import numpy as np
 
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import messagebox
 import os
 
 selected_headshot_path = None
@@ -24,7 +25,20 @@ segmenter = vision.ImageSegmenter.create_from_options(options)
 def getHeadshot ():
     global selected_headshot_path
     selected_headshot_path = filedialog.askopenfilename(title="Select Your Headshot")
+    blank, file_type = os.path.splitext(selected_headshot_path)
+    valid_types = [".jpg" , ".jpeg", ".png", ".bmp"]
+
+    # check if user cancelled
+    if not selected_headshot_path:
+        return
+    
+    # check file is correct format
+    if file_type.lower() not in valid_types:
+        messagebox.showerror("Error: Invalid file type", "Please enter a valid image file (jpg, jpeg, png, bmp)")
+        return
+    
     print(f"Headshot selected: {selected_headshot_path}")
+
 
 def getBackground(bg_file):
     global selected_background_path
@@ -46,6 +60,11 @@ def processHeadshot():
     mask = segmentation_res.category_mask
     mask_array = mask.numpy_view()
     fixed_mask = (mask_array > 0).astype(np.uint8)
+
+    # shrink mask to remove white edges
+    kernel = np.ones((5, 5), np.uint8)
+    fixed_mask = cv2.erode(fixed_mask, kernel, iterations=5)
+    fixed_mask = np.expand_dims(fixed_mask, axis=2) # fix resizing issue
 
     # remove the background by applying the mask to the image
     just_person = user_headshot * fixed_mask
