@@ -37,8 +37,21 @@ fixed_mask = (mask_array > 0).astype(np.uint8)
 # remove the background by applying the mask to the image
 just_person = user_headshot * fixed_mask
 
+# load a background image and resize to fit
+backgroundImage_path = './backgrounds/background1.jpg'
+backgroundImage = cv2.imread(backgroundImage_path)
+
+width = 8510
+height = 5674
+resize_background = cv2.resize(backgroundImage, (width, height))
+
+# overlay the new background with the person 
+invert_mask = 1 - fixed_mask
+final_headshot = (just_person) + (invert_mask * resize_background)
+
+
 # save output (lacation and name, to be saved)
-cv2.imwrite('./outputs/mask.png', just_person)
+cv2.imwrite('./outputs/mask.png', final_headshot)
 
 
-print("Mask saved to outputs/mask.png")
+print("Final Result Saved!")
