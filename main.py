@@ -31,7 +31,14 @@ mask = segmentation_res.category_mask
 # convert the mask to something that cv2 is able to use
 mask_array = mask.numpy_view()
 
+# covert mask from 0 - 15 to 0 - 1
+fixed_mask = (mask_array > 0).astype(np.uint8)
+
+# remove the background by applying the mask to the image
+just_person = user_headshot * fixed_mask
+
 # save output (lacation and name, to be saved)
-cv2.imwrite('./outputs/mask.png', mask_array)
+cv2.imwrite('./outputs/mask.png', just_person)
+
 
 print("Mask saved to outputs/mask.png")
