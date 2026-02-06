@@ -11,6 +11,17 @@ from tkinter import filedialog
 from tkinter import messagebox
 import os
 
+from removebg import RemoveBg
+from dotenv import load_dotenv
+
+import requests
+
+load_dotenv()
+
+# load api key from .env
+REMOVEBG_API_KEY = os.getenv('REMOVEBG_API_KEY')
+rmbg = RemoveBg(REMOVEBG_API_KEY, error_log_file='errors.log')
+
 selected_headshot_path = None
 selected_background_path = None
 
@@ -48,40 +59,55 @@ def getBackground(bg_file):
 
 
 def processHeadshot():
-    # Loads user headshot image
-    user_headshot = cv2.imread(selected_headshot_path)
+    output_path = './outputs/no_bg.png'
 
-    # convert file type to what mp needs
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, 
-                        data=user_headshot)
+    try:
+        
+        # call api using requests
+        response = requests.post(
+            'https://api.remove.bg/v1.0/removebg',
+            files={'image_file': open(selected_headshot_path, 'rb')},
+            data={'size': 'auto'},
+            headers={'X-Api-Key': REMOVEBG_API_KEY},
+        )
+        
+        print(f"API Response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            # save result
+            with open(output_path, 'wb') as out:
+                out.write(response.content)
+            print(f"Background removed, saved to: {output_path}")
+        else:
+            raise Exception(f"API Error {response.status_code}: {response.text}")
 
-    # segment the image
-    segmentation_res = segmenter.segment(mp_image)
-    mask = segmentation_res.category_mask
-    mask_array = mask.numpy_view()
-    fixed_mask = (mask_array > 0).astype(np.uint8)
+        # load image
+        person_rgba = cv2.imread(output_path, cv2.IMREAD_UNCHANGED)
 
-    # shrink mask to remove white edges
-    kernel = np.ones((5, 5), np.uint8)
-    fixed_mask = cv2.erode(fixed_mask, kernel, iterations=5)
-    fixed_mask = np.expand_dims(fixed_mask, axis=2) # fix resizing issue
+        if person_rgba is None:
+            raise Exception(f"Failed to load {output_path}")
+        
+        # load and resize background
+        background = cv2.imread(selected_background_path)
+        height, width = person_rgba.shape[:2]
+        background_resized = cv2.resize(background, (width, height))
 
-    # remove the background by applying the mask to the image
-    just_person = user_headshot * fixed_mask
+        if person_rgba.shape[2] == 4:
+            bgr = person_rgba[:, :, :3]
+            alpha = person_rgba[:, :, 3:] / 255.0
+            final = (bgr * alpha + background_resized * (1 - alpha)).astype(np.uint8)
+        else:
+            final = person_rgba
+        
+        # save new image
+        cv2.imwrite('./outputs/final_result.png', final)
+        messagebox.showinfo("Success", "Background replaced!")
+        print("Final Result Saved!")
 
-    # load a background image and resize to fit
-    backgroundImage = cv2.imread(selected_background_path)
-    height, width = user_headshot.shape[:2]
-    resize_background = cv2.resize(backgroundImage, (width, height))
-
-
-    # overlay the new background with the person 
-    invert_mask = 1 - fixed_mask
-    final_headshot = (just_person) + (invert_mask * resize_background)
-
-    # save new image
-    cv2.imwrite('./outputs/final_result.png', final_headshot)
-    print("Final Result Saved!")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed: {str(e)}")
+        print(f"Error details: {e}")
+    
 
 root = tk.Tk()
 root.title("Headshot Background Replacer")
